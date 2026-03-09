@@ -56,7 +56,7 @@ def read_sheet(spreadsheet_id: str, sheet_range: str, creds) -> list[dict]:
     if not rows:
         return []
 
-    headers = rows[0]
+    headers = [h.lower() for h in rows[0]]
     records = []
     for row in rows[1:]:
         # Pad short rows so every header has a value
