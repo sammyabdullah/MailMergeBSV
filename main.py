@@ -23,6 +23,7 @@ Example columns:
 
 import argparse
 import sys
+import time
 
 from sheets import get_credentials, read_sheet
 from gmail_sender import (
@@ -158,6 +159,8 @@ def main(argv=None):
                 if args.send:
                     send_email(gmail, msg)
                     print(f"  Row {i}: sent → {recipient}")
+                    if i < len(rows):
+                        time.sleep(30)
                 else:
                     create_draft(gmail, msg)
                     print(f"  Row {i}: draft saved → {recipient}")
