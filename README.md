@@ -70,11 +70,18 @@ python main.py \
   --template email_template.html \
   --dry-run
 
-# Send for real
+# Save as drafts (default)
 python main.py \
   --sheet-id YOUR_SPREADSHEET_ID \
   --subject "Hi {{first_name}}, your order #{{order_id}} is ready!" \
   --template email_template.html
+
+# Send immediately
+python main.py \
+  --sheet-id YOUR_SPREADSHEET_ID \
+  --subject "Hi {{first_name}}, your order #{{order_id}} is ready!" \
+  --template email_template.html \
+  --send
 ```
 
 The first run will open a browser window for you to authorise access. A `token.json` file is saved so you won't need to log in again.
@@ -89,7 +96,8 @@ The first run will open a browser window for you to authorise access. A `token.j
 | `--subject` | *(required)* | Subject line with `{{placeholders}}` |
 | `--template` | `email_template.html` | Path to your HTML template file |
 | `--range` | `Sheet1!A:Z` | A1 notation range to read from the sheet |
-| `--dry-run` | off | Preview emails without sending |
+| `--send` | off | Send emails immediately (default: save as drafts) |
+| `--dry-run` | off | Preview emails without sending or drafting |
 | `--credentials` | `credentials.json` | Path to your OAuth2 credentials file |
 | `--token` | `token.json` | Path where the OAuth token is cached |
 

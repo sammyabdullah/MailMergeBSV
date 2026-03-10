@@ -31,6 +31,7 @@ from gmail_sender import (
     render_template,
     build_message,
     create_draft,
+    send_email,
 )
 
 
@@ -65,6 +66,11 @@ def parse_args(argv=None):
         default="Sheet1!A:Z",
         metavar="A1_RANGE",
         help="Sheet range to read (default: Sheet1!A:Z).",
+    )
+    p.add_argument(
+        "--send",
+        action="store_true",
+        help="Send emails immediately instead of saving as drafts.",
     )
     p.add_argument(
         "--dry-run",
@@ -119,7 +125,8 @@ def main(argv=None):
 
     gmail = get_gmail_service(creds)
     sender = get_sender_address(gmail)
-    print(f"Saving drafts as: {sender}")
+    mode = "Sending" if args.send else "Saving drafts"
+    print(f"{mode} as: {sender}")
 
     saved = 0
     errors = 0
@@ -148,18 +155,24 @@ def main(argv=None):
         else:
             try:
                 msg = build_message(sender, recipient, subject, body)
-                create_draft(gmail, msg)
-                print(f"  Row {i}: draft saved → {recipient}")
+                if args.send:
+                    send_email(gmail, msg)
+                    print(f"  Row {i}: sent → {recipient}")
+                else:
+                    create_draft(gmail, msg)
+                    print(f"  Row {i}: draft saved → {recipient}")
                 saved += 1
             except Exception as exc:
-                print(f"  Row {i} ({recipient}): draft failed — {exc}")
+                action = "send" if args.send else "draft"
+                print(f"  Row {i} ({recipient}): {action} failed — {exc}")
                 errors += 1
 
     print()
     if args.dry_run:
-        print(f"Dry run complete. Would have saved {len(rows)} draft(s).")
+        print(f"Dry run complete. Would have {'sent' if args.send else 'saved'} {len(rows)} email(s).")
     else:
-        print(f"Done. Drafts saved: {saved}  |  Errors: {errors}")
+        action = "Sent" if args.send else "Drafts saved"
+        print(f"Done. {action}: {saved}  |  Errors: {errors}")
 
 
 if __name__ == "__main__":
