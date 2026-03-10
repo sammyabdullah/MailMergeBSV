@@ -140,6 +140,8 @@ def main(argv=None):
 
         try:
             subject = render_template(args.subject, row)
+            if row.get("recall", "").strip():
+                subject = subject.replace("round", "update")
             body = render_template(body_template, row)
         except ValueError as exc:
             print(f"  Row {i} ({recipient}): template error — {exc}")
