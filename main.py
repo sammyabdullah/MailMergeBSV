@@ -30,7 +30,7 @@ from gmail_sender import (
     get_sender_address,
     render_template,
     build_message,
-    send_email,
+    create_draft,
 )
 
 
@@ -119,9 +119,9 @@ def main(argv=None):
 
     gmail = get_gmail_service(creds)
     sender = get_sender_address(gmail)
-    print(f"Sending as: {sender}")
+    print(f"Saving drafts as: {sender}")
 
-    sent = 0
+    saved = 0
     errors = 0
 
     for i, row in enumerate(rows, start=1):
@@ -148,18 +148,18 @@ def main(argv=None):
         else:
             try:
                 msg = build_message(sender, recipient, subject, body)
-                send_email(gmail, msg)
-                print(f"  Row {i}: sent → {recipient}")
-                sent += 1
+                create_draft(gmail, msg)
+                print(f"  Row {i}: draft saved → {recipient}")
+                saved += 1
             except Exception as exc:
-                print(f"  Row {i} ({recipient}): send failed — {exc}")
+                print(f"  Row {i} ({recipient}): draft failed — {exc}")
                 errors += 1
 
     print()
     if args.dry_run:
-        print(f"Dry run complete. Would have sent to {len(rows)} recipient(s).")
+        print(f"Dry run complete. Would have saved {len(rows)} draft(s).")
     else:
-        print(f"Done. Sent: {sent}  |  Errors: {errors}")
+        print(f"Done. Drafts saved: {saved}  |  Errors: {errors}")
 
 
 if __name__ == "__main__":

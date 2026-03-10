@@ -61,6 +61,11 @@ def send_email(service, message_dict: dict) -> dict:
     return service.users().messages().send(userId="me", body=message_dict).execute()
 
 
+def create_draft(service, message_dict: dict) -> dict:
+    """Save a pre-built message dict as a Gmail draft."""
+    return service.users().drafts().create(userId="me", body={"message": message_dict}).execute()
+
+
 def get_gmail_service(creds):
     return build("gmail", "v1", credentials=creds)
 
