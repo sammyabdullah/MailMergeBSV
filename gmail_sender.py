@@ -1,8 +1,6 @@
 """Build and send emails via the Gmail API."""
 
 import base64
-import re
-from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from googleapiclient.discovery import build
@@ -29,28 +27,17 @@ def render_template(template_str: str, row: dict) -> str:
         ) from exc
 
 
-def _html_to_plain(html: str) -> str:
-    """Very simple HTML → plain-text strip (good enough for fallback)."""
-    text = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
-    text = re.sub(r"<[^>]+>", "", text)
-    return text.strip()
-
-
 def build_message(
     sender: str,
     recipient: str,
     subject: str,
     body_html: str,
 ) -> dict:
-    """Return a Gmail API-ready message dict."""
-    msg = MIMEMultipart("alternative")
+    """Return a Gmail API-ready message dict (plain text only)."""
+    msg = MIMEText(body_html, "plain")
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
-
-    plain = _html_to_plain(body_html)
-    msg.attach(MIMEText(plain, "plain"))
-    msg.attach(MIMEText(body_html, "html"))
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     return {"raw": raw}
