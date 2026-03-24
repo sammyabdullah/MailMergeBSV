@@ -44,14 +44,34 @@ def render_template(template_str: str, row: dict) -> str:
         ) from exc
 
 
+def _plain_to_gmail_html(text: str) -> str:
+    """Convert plain text to Gmail's native div-based HTML format.
+
+    This matches exactly what Gmail creates when you type an email manually,
+    so drafts send identically from laptop (web) and phone (app).
+    """
+    parts = []
+    for line in text.split("\n"):
+        if line:
+            escaped = (
+                line.replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+            )
+            parts.append(f"<div>{escaped}</div>")
+        else:
+            parts.append("<div><br></div>")
+    return '<div dir="ltr">' + "".join(parts) + "</div>"
+
+
 def build_message(
     sender: str,
     recipient: str,
     subject: str,
     body_html: str,
 ) -> dict:
-    """Return a Gmail API-ready message dict as plain text (no formatting)."""
-    msg = MIMEText(body_html, "plain")
+    """Return a Gmail API-ready message dict in Gmail's native HTML format."""
+    msg = MIMEText(_plain_to_gmail_html(body_html), "html")
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
