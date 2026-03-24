@@ -1,10 +1,24 @@
 """Build and send emails via the Gmail API."""
 
 import base64
+import re
 from email.mime.text import MIMEText
 
 from googleapiclient.discovery import build
 from jinja2 import Environment, BaseLoader, StrictUndefined, UndefinedError
+
+
+def _html_to_plain(html: str) -> str:
+    """Convert HTML to plain text, preserving paragraph breaks."""
+    # Replace block-level tags with newlines before stripping
+    text = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</div>", "\n", text, flags=re.IGNORECASE)
+    # Strip all remaining tags
+    text = re.sub(r"<[^>]+>", "", text)
+    # Collapse excess blank lines (more than two in a row)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def _make_jinja_env() -> Environment:
@@ -33,8 +47,8 @@ def build_message(
     subject: str,
     body_html: str,
 ) -> dict:
-    """Return a Gmail API-ready message dict (plain text only)."""
-    msg = MIMEText(body_html, "html")
+    """Return a Gmail API-ready message dict as plain text (no formatting)."""
+    msg = MIMEText(_html_to_plain(body_html), "plain")
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
