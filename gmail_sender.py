@@ -48,7 +48,7 @@ def build_message(
     body_html: str,
 ) -> dict:
     """Return a Gmail API-ready message dict as plain text (no formatting)."""
-    msg = MIMEText(_html_to_plain(body_html), "plain")
+    msg = MIMEText(body_html, "plain")
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject

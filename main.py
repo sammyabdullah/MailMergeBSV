@@ -33,6 +33,7 @@ from gmail_sender import (
     build_message,
     create_draft,
     send_email,
+    _html_to_plain,
 )
 
 
@@ -142,7 +143,7 @@ def main(argv=None):
             subject = render_template(args.subject, row)
             if row.get("recall", "").strip():
                 subject = subject.replace("round", "update")
-            body = render_template(body_template, row)
+            body = _html_to_plain(render_template(body_template, row))
         except ValueError as exc:
             print(f"  Row {i} ({recipient}): template error — {exc}")
             errors += 1
