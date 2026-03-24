@@ -18,8 +18,8 @@ def _html_to_plain(html: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)
     # Strip leading/trailing whitespace from each line
     text = "\n".join(line.strip() for line in text.splitlines())
-    # Collapse excess blank lines (more than two in a row)
-    text = re.sub(r"\n{3,}", "\n\n", text)
+    # Collapse all consecutive newlines into one
+    text = re.sub(r"\n+", "\n", text)
     return text.strip()
 
 
