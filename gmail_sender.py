@@ -10,16 +10,17 @@ from jinja2 import Environment, BaseLoader, StrictUndefined, UndefinedError
 
 def _html_to_plain(html: str) -> str:
     """Convert HTML to plain text, preserving paragraph breaks."""
-    # Replace block-level tags with newlines before stripping
-    text = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
-    text = re.sub(r"</p>", "\n", text, flags=re.IGNORECASE)
-    text = re.sub(r"</div>", "\n", text, flags=re.IGNORECASE)
+    # Paragraph-ending tags → blank line separator
+    text = re.sub(r"</p>", "\n\n", html, flags=re.IGNORECASE)
+    text = re.sub(r"</div>", "\n\n", text, flags=re.IGNORECASE)
+    # Line-break tags → single newline
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
     # Strip all remaining tags
     text = re.sub(r"<[^>]+>", "", text)
     # Strip leading/trailing whitespace from each line
     text = "\n".join(line.strip() for line in text.splitlines())
-    # Collapse all consecutive newlines into one
-    text = re.sub(r"\n+", "\n", text)
+    # Collapse 3+ newlines to exactly two (one blank line between paragraphs)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
