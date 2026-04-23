@@ -22,6 +22,7 @@ Example columns:
 """
 
 import argparse
+import re
 import sys
 import time
 
@@ -141,7 +142,11 @@ def main(argv=None):
 
         try:
             subject = render_template(args.subject, row)
-            if row.get("recall", "").strip():
+            recall = row.get("recall", "").strip()
+            year_match = re.search(r"(2021|2022|2023|2024)", recall)
+            if year_match:
+                subject = f"{row.get('company', '')} since {year_match.group(1)}"
+            elif recall:
                 subject = subject.replace("round", "update")
             body = _html_to_plain(render_template(body_template, row))
         except ValueError as exc:
