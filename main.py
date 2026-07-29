@@ -22,6 +22,7 @@ Example columns:
 """
 
 import argparse
+import os
 import re
 import sys
 import time
@@ -92,6 +93,14 @@ def parse_args(argv=None):
         metavar="FILE",
         help="Path where the OAuth token is cached (default: token.json).",
     )
+    p.add_argument(
+        "--num-accounts",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Split emails equally across N accounts (uses token1.json through tokenN.json). "
+             "Run setup_accounts.py first to authenticate each account.",
+    )
     return p.parse_args(argv)
 
 
@@ -103,16 +112,80 @@ def load_template(path: str) -> str:
         sys.exit(f"Error: template file '{path}' not found.")
 
 
+def split_rows(rows, n):
+    """Split rows into n roughly-equal chunks."""
+    k, rem = divmod(len(rows), n)
+    chunks, start = [], 0
+    for i in range(n):
+        size = k + (1 if i < rem else 0)
+        chunks.append(rows[start:start + size])
+        start += size
+    return [c for c in chunks if c]
+
+
+def build_subject(subject_template, row):
+    subject = render_template(subject_template, row)
+    recall = row.get("recall", "").strip()
+    year_match = re.search(r"(2021|2022|2023|2024)", recall)
+    if year_match:
+        subject = f"{row.get('company', '')} since {year_match.group(1)}"
+    elif recall:
+        subject = subject.replace("round", "update")
+    return subject
+
+
+def process_chunk(chunk, gmail, sender, body_template, args, acct_label=""):
+    saved = errors = 0
+    for idx, row in enumerate(chunk):
+        recipient = row.get(EMAIL_COLUMN, "").strip()
+        if not recipient:
+            print(f"  {acct_label}Row {idx+1}: skipping — no email address.")
+            continue
+
+        try:
+            subject = build_subject(args.subject, row)
+            body = _html_to_plain(render_template(body_template, row))
+        except ValueError as exc:
+            print(f"  {acct_label}Row {idx+1} ({recipient}): template error — {exc}")
+            errors += 1
+            continue
+
+        if args.dry_run:
+            print(f"\n{'='*60}")
+            print(f"  From   : {sender}")
+            print(f"  To     : {recipient}")
+            print(f"  Subject: {subject}")
+            print(f"  Body preview (first 300 chars):")
+            print(f"  {body[:300].replace(chr(10), chr(10)+'  ')}")
+            print(f"{'='*60}")
+        else:
+            try:
+                msg = build_message(sender, recipient, subject, body)
+                if args.send:
+                    send_email(gmail, msg)
+                    print(f"  {acct_label}Row {idx+1}: sent → {recipient}")
+                    if idx < len(chunk) - 1:
+                        time.sleep(30)
+                else:
+                    create_draft(gmail, msg)
+                    print(f"  {acct_label}Row {idx+1}: draft saved → {recipient}")
+                saved += 1
+            except Exception as exc:
+                action = "send" if args.send else "draft"
+                print(f"  {acct_label}Row {idx+1} ({recipient}): {action} failed — {exc}")
+                errors += 1
+    return saved, errors
+
+
 def main(argv=None):
     args = parse_args(argv)
-
     body_template = load_template(args.template)
 
+    # For multi-account mode, use token1.json to read the sheet
+    sheet_token = "token1.json" if args.num_accounts > 1 else args.token
+
     print("Authenticating with Google…")
-    creds = get_credentials(
-        token_path=args.token,
-        credentials_path=args.credentials,
-    )
+    creds = get_credentials(token_path=sheet_token, credentials_path=args.credentials)
 
     print(f"Reading sheet {args.sheet_id} (range: {args.range})…")
     rows = read_sheet(args.sheet_id, args.range, creds)
@@ -126,64 +199,51 @@ def main(argv=None):
             f"Found columns: {list(rows[0].keys())}"
         )
 
-    gmail = get_gmail_service(creds)
-    sender = get_sender_address(gmail)
-    mode = "Sending" if args.send else "Saving drafts"
-    print(f"{mode} as: {sender}")
+    total_saved = total_errors = 0
 
-    saved = 0
-    errors = 0
+    if args.num_accounts == 1:
+        gmail = get_gmail_service(creds)
+        sender = get_sender_address(gmail)
+        mode = "Sending" if args.send else "Saving drafts"
+        print(f"{mode} as: {sender}")
+        total_saved, total_errors = process_chunk(rows, gmail, sender, body_template, args)
 
-    for i, row in enumerate(rows, start=1):
-        recipient = row.get(EMAIL_COLUMN, "").strip()
-        if not recipient:
-            print(f"  Row {i}: skipping — no email address.")
-            continue
+    else:
+        n = args.num_accounts
+        chunks = split_rows(rows, n)
+        print(f"Splitting {len(rows)} row(s) across {n} accounts…\n")
 
-        try:
-            subject = render_template(args.subject, row)
-            recall = row.get("recall", "").strip()
-            year_match = re.search(r"(2021|2022|2023|2024)", recall)
-            if year_match:
-                subject = f"{row.get('company', '')} since {year_match.group(1)}"
-            elif recall:
-                subject = subject.replace("round", "update")
-            body = _html_to_plain(render_template(body_template, row))
-        except ValueError as exc:
-            print(f"  Row {i} ({recipient}): template error — {exc}")
-            errors += 1
-            continue
+        for i in range(n):
+            token_path = f"token{i+1}.json"
+            if not os.path.exists(token_path):
+                sys.exit(
+                    f"Error: {token_path} not found.\n"
+                    f"Run this first to set up your accounts:\n"
+                    f"  python setup_accounts.py {n}"
+                )
+            chunk = chunks[i] if i < len(chunks) else []
+            if not chunk:
+                print(f"Account {i+1}: no rows assigned, skipping.")
+                continue
 
-        if args.dry_run:
-            print(f"\n{'='*60}")
-            print(f"  To     : {recipient}")
-            print(f"  Subject: {subject}")
-            print(f"  Body preview (first 300 chars):")
-            print(f"  {body[:300].replace(chr(10), chr(10)+'  ')}")
-            print(f"{'='*60}")
-        else:
-            try:
-                msg = build_message(sender, recipient, subject, body)
-                if args.send:
-                    send_email(gmail, msg)
-                    print(f"  Row {i}: sent → {recipient}")
-                    if i < len(rows):
-                        time.sleep(30)
-                else:
-                    create_draft(gmail, msg)
-                    print(f"  Row {i}: draft saved → {recipient}")
-                saved += 1
-            except Exception as exc:
-                action = "send" if args.send else "draft"
-                print(f"  Row {i} ({recipient}): {action} failed — {exc}")
-                errors += 1
+            print(f"Authenticating account {i+1}…")
+            acct_creds = get_credentials(token_path=token_path, credentials_path=args.credentials)
+            gmail = get_gmail_service(acct_creds)
+            sender = get_sender_address(gmail)
+            mode = "Sending" if args.send else "Saving drafts"
+            print(f"Account {i+1} ({sender}): {mode} {len(chunk)} email(s)")
+
+            s, e = process_chunk(chunk, gmail, sender, body_template, args, acct_label=f"[Acct {i+1}] ")
+            total_saved += s
+            total_errors += e
+            print()
 
     print()
     if args.dry_run:
         print(f"Dry run complete. Would have {'sent' if args.send else 'saved'} {len(rows)} email(s).")
     else:
         action = "Sent" if args.send else "Drafts saved"
-        print(f"Done. {action}: {saved}  |  Errors: {errors}")
+        print(f"Done. {action}: {total_saved}  |  Errors: {total_errors}")
 
 
 if __name__ == "__main__":
